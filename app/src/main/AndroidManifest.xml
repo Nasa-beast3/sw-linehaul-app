@@ -16,6 +16,25 @@
     <!-- Asked once so the OS doesn't aggressively kill the background service
          to save battery — the driver taps "Allow" on one system dialog. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Lets the "Choose file" step on photo screens (Origin/Destination
+         warehouse photo, etc) actually open the camera — see MainActivity's
+         onShowFileChooser. Without this, the WebView's file input silently
+         does nothing when tapped. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Android 11+ hides other apps by default unless declared here — the
+         camera app and a gallery/file picker are what onShowFileChooser
+         launches, so they must be visible to this app or the chooser comes
+         back empty. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
+            <data android:mimeType="image/*" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -39,6 +58,19 @@
             android:name=".LocationForegroundService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- Gives the camera app a content:// URI it's allowed to write the
+             photo to (a raw file:// URI is blocked on modern Android) — see
+             MainActivity's onShowFileChooser / launchCameraCapture. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 </manifest>

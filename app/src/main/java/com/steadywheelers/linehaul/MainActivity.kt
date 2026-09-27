@@ -14,6 +14,11 @@ import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * The entire app UI is still Index.html — everything already built (login,
@@ -28,6 +33,14 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
     private val REQUEST_CODE_PERMISSIONS = 1001
+    private val REQUEST_CODE_FILE_CHOOSER = 2001
+
+    // Holds the WebView's callback between "the page tapped Choose file" and
+    // "the camera/gallery app returned a result" — the WebView is paused on
+    // this the whole time, so losing it means the page's Submit button never
+    // sees a file and stays stuck exactly like the bug this fixes.
+    private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
+    private var pendingCameraPhotoUri: Uri? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +74,53 @@ class MainActivity : AppCompatActivity() {
                 callback: GeolocationPermissions.Callback?
             ) {
                 callback?.invoke(origin, hasLocationPermission(), false)
+            }
+
+            // Without this override, the WebView does NOTHING when a page's
+            // <input type="file"> "Choose file" button is tapped — no
+            // picker, no camera, no error, it just silently sits there.
+            // This is what was happening on the Origin/Destination Photo
+            // steps: the page itself was fine, the WebView just never asked
+            // the OS to show anything.
+            override fun onShowFileChooser(
+                view: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                fileUploadCallback?.onReceiveValue(null)
+                fileUploadCallback = filePathCallback
+
+                val captureIntent = try {
+                    val photoFile = createTempPhotoFile()
+                    pendingCameraPhotoUri = FileProvider.getUriForFile(
+                        this@MainActivity, "$packageName.fileprovider", photoFile
+                    )
+                    Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                        putExtra(android.provider.MediaStore.EXTRA_OUTPUT, pendingCameraPhotoUri)
+                        addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+
+                val galleryIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "image/*"
+                }
+
+                val chooser = Intent.createChooser(galleryIntent, "Take or choose a photo")
+                if (captureIntent != null) {
+                    chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(captureIntent))
+                }
+
+                try {
+                    startActivityForResult(chooser, REQUEST_CODE_FILE_CHOOSER)
+                } catch (e: Exception) {
+                    fileUploadCallback?.onReceiveValue(null)
+                    fileUploadCallback = null
+                    return false
+                }
+                return true
             }
         }
 
@@ -149,5 +209,38 @@ class MainActivity : AppCompatActivity() {
 
     override fun onBackPressed() {
         if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
+    }
+
+    private fun createTempPhotoFile(): File {
+        val dir = File(cacheDir, "camera_photos").apply { mkdirs() }
+        val name = "photo_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".jpg"
+        return File(dir, name)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_CODE_FILE_CHOOSER) return
+
+        val callback = fileUploadCallback
+        fileUploadCallback = null
+        if (callback == null) return
+
+        if (resultCode != Activity.RESULT_OK) {
+            callback.onReceiveValue(null)
+            pendingCameraPhotoUri = null
+            return
+        }
+
+        // A gallery pick comes back in `data`; a camera capture comes back
+        // with `data == null` (the photo is wherever EXTRA_OUTPUT pointed,
+        // which is the file we already made in onShowFileChooser).
+        val resultUri = data?.data ?: pendingCameraPhotoUri
+        pendingCameraPhotoUri = null
+
+        if (resultUri != null) {
+            callback.onReceiveValue(arrayOf(resultUri))
+        } else {
+            callback.onReceiveValue(null)
+        }
     }
 }

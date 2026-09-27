@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Where the temporary camera photo lives before it's handed to the
+         web page's file input — app-private storage, cleared automatically. -->
+    <cache-path name="camera_photos" path="camera_photos/" />
+</paths>
