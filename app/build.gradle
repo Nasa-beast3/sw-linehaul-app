@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.steadywheelers.linehaul'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.steadywheelers.linehaul"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    // Sideloaded APK only (no Play Store), so the debug build is what we
+    // actually ship — it's auto-signed with Android's built-in debug key,
+    // which is exactly what "install unknown apps" expects. No separate
+    // signing setup needed for this.
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.webkit:webkit:1.11.0'
+}
