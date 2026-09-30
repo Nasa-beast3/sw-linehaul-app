@@ -11,13 +11,39 @@ android {
         applicationId "com.steadywheelers.linehaul"
         minSdk 24
         targetSdk 34
-        versionCode 3
-        versionName "1.2"
+        versionCode 4
+        versionName "1.3"
+    }
+
+    // THE FIX for "driver has to uninstall before every update": Android
+    // only allows one APK to install directly over another if BOTH are
+    // signed with the exact same key. Every build used to auto-generate a
+    // brand-new random debug key (Gradle's default ~/.android/debug.keystore
+    // doesn't exist on a fresh GitHub Actions runner, so it silently made a
+    // new one every single run) — so every new APK looked like a different,
+    // unrelated app to Android, and it refused to update in place. This
+    // fixed keystore is committed once and reused by every future build, so
+    // from now on tapping the download link is a normal update: no
+    // uninstalling, no data loss, no separate "delete the old app" step.
+    signingConfigs {
+        release {
+            storeFile file("../keystore/sw-linehaul-release.keystore")
+            storePassword "swlinehaul2026"
+            keyAlias "sw-linehaul"
+            keyPassword "swlinehaul2026"
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+        debug {
+            // We ship the debug build (see CI workflow), so it also needs
+            // the stable key — otherwise this fix only applies to a build
+            // type we never actually distribute.
+            signingConfig signingConfigs.release
         }
     }
 
@@ -28,11 +54,6 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
-
-    // Sideloaded APK only (no Play Store), so the debug build is what we
-    // actually ship — it's auto-signed with Android's built-in debug key,
-    // which is exactly what "install unknown apps" expects. No separate
-    // signing setup needed for this.
 }
 
 dependencies {
